@@ -1,10 +1,15 @@
 import os
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import (
     Flask, render_template, request, redirect,
     url_for, flash, session
 )
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+# Cargar variables de entorno (.env)
+load_dotenv()
 
 # -----------------------
 # CONFIGURACIÓN BÁSICA
@@ -21,7 +26,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Formatos permitidos (ampliado)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 
-DB_PATH = os.path.join(BASE_DIR, 'database.db')
+# URL de la base de datos PostgreSQL (Render)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 def allowed_file(filename):
@@ -32,23 +38,30 @@ def allowed_file(filename):
 # CONEXIÓN A LA BD
 # -----------------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    """
+    Conecta a PostgreSQL usando DATABASE_URL.
+    """
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL no está definida. "
+            "Créala en .env con tu External Database URL de Render."
+        )
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return conn
 
 
 def init_db():
-    """Crea la base de datos y llena la tabla de participantes si no existe."""
-    if os.path.exists(DB_PATH):
-        return
-
+    """
+    Crea tablas en PostgreSQL si no existen
+    y llena la tabla de participantes (idempotente).
+    """
     conn = get_db()
     c = conn.cursor()
 
     # Tabla de participantes (quién es, código, y a quién le da regalo)
     c.execute("""
-        CREATE TABLE participants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS participants (
+            id SERIAL PRIMARY KEY,
             name TEXT UNIQUE NOT NULL,
             code TEXT NOT NULL,
             gives_to INTEGER,
@@ -58,8 +71,8 @@ def init_db():
 
     # Tabla de deseos de regalo (dos opciones, con foto opcional)
     c.execute("""
-        CREATE TABLE wishes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS wishes (
+            id SERIAL PRIMARY KEY,
             participant_id INTEGER UNIQUE NOT NULL,
             wish1 TEXT,
             wish1_img TEXT,
@@ -71,8 +84,8 @@ def init_db():
 
     # Tabla de comidas
     c.execute("""
-        CREATE TABLE foods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS foods (
+            id SERIAL PRIMARY KEY,
             person_name TEXT NOT NULL,
             title TEXT NOT NULL,
             description TEXT,
@@ -98,11 +111,15 @@ def init_db():
         ("Brenda",          "BR88", None),
     ]
 
-    c.executemany(
-        "INSERT INTO participants (name, code, gives_to) VALUES (?, ?, ?);",
-        participants
-    )
-    conn.commit()
+    for name, code, gives_to in participants:
+        c.execute(
+            """
+            INSERT INTO participants (name, code, gives_to)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (name) DO NOTHING;
+            """,
+            (name, code, gives_to)
+        )
 
     # Mapeo: quien le da regalo a quién (por nombre)
     asignaciones = {
@@ -122,21 +139,21 @@ def init_db():
 
     # Actualizar gives_to usando los nombres
     for giver_name, receiver_name in asignaciones.items():
-        c.execute("SELECT id FROM participants WHERE name = ?;", (receiver_name,))
+        c.execute("SELECT id FROM participants WHERE name = %s;", (receiver_name,))
         receiver_row = c.fetchone()
         if receiver_row:
             receiver_id = receiver_row["id"]
             c.execute(
-                "UPDATE participants SET gives_to = ? WHERE name = ?;",
+                "UPDATE participants SET gives_to = %s WHERE name = %s;",
                 (receiver_id, giver_name)
             )
 
     conn.commit()
     conn.close()
-    print("Base de datos inicializada.")
+    print("Base de datos PostgreSQL inicializada / sincronizada.")
 
 
-# Inicializar la BD si no existe
+# Inicializar la BD si no existe (o sincronizar)
 init_db()
 
 
@@ -168,10 +185,11 @@ def login():
         code = request.form.get("code", "").strip()
 
         c.execute(
-            "SELECT * FROM participants WHERE id = ? AND code = ?;",
+            "SELECT * FROM participants WHERE id = %s AND code = %s;",
             (participant_id, code)
         )
         user = c.fetchone()
+        conn.close()
 
         if user:
             session["user_id"] = user["id"]
@@ -182,7 +200,9 @@ def login():
                 return redirect(url_for("dashboard"))
         else:
             flash("Nombre o código incorrecto. Inténtalo de nuevo.", "danger")
+            return redirect(url_for("login", next=next_page))
 
+    conn.close()
     return render_template("login.html", participants=participants)
 
 
@@ -193,7 +213,7 @@ def get_logged_user():
 
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT * FROM participants WHERE id = ?;", (user_id,))
+    c.execute("SELECT * FROM participants WHERE id = %s;", (user_id,))
     user = c.fetchone()
     conn.close()
     return user
@@ -222,7 +242,7 @@ def dashboard():
 
     # Tus propios deseos de regalo (para que tú los edites)
     c.execute(
-        "SELECT * FROM wishes WHERE participant_id = ?;",
+        "SELECT * FROM wishes WHERE participant_id = %s;",
         (user["id"],)
     )
     my_wishes = c.fetchone()
@@ -260,8 +280,8 @@ def dashboard():
             c.execute(
                 """
                 UPDATE wishes
-                SET wish1 = ?, wish1_img = ?, wish2 = ?, wish2_img = ?
-                WHERE participant_id = ?;
+                SET wish1 = %s, wish1_img = %s, wish2 = %s, wish2_img = %s
+                WHERE participant_id = %s;
                 """,
                 (wish1, wish1_img_filename, wish2, wish2_img_filename, user["id"])
             )
@@ -269,12 +289,13 @@ def dashboard():
             c.execute(
                 """
                 INSERT INTO wishes (participant_id, wish1, wish1_img, wish2, wish2_img)
-                VALUES (?, ?, ?, ?, ?);
+                VALUES (%s, %s, %s, %s, %s);
                 """,
                 (user["id"], wish1, wish1_img_filename, wish2, wish2_img_filename)
             )
 
         conn.commit()
+        conn.close()
         flash("Tu lista de deseos se guardó correctamente.", "success")
         return redirect(url_for("dashboard"))
 
@@ -299,7 +320,7 @@ def delete_wishes():
 
     # Buscar nombres de archivos para borrarlos del disco
     c.execute(
-        "SELECT wish1_img, wish2_img FROM wishes WHERE participant_id = ?;",
+        "SELECT wish1_img, wish2_img FROM wishes WHERE participant_id = %s;",
         (user["id"],)
     )
     row = c.fetchone()
@@ -317,7 +338,7 @@ def delete_wishes():
 
         # Borrar registro de desires
         c.execute(
-            "DELETE FROM wishes WHERE participant_id = ?;",
+            "DELETE FROM wishes WHERE participant_id = %s;",
             (user["id"],)
         )
         conn.commit()
@@ -349,14 +370,14 @@ def gift():
 
     if user["gives_to"]:
         c.execute(
-            "SELECT * FROM participants WHERE id = ?;",
+            "SELECT * FROM participants WHERE id = %s;",
             (user["gives_to"],)
         )
         receiver = c.fetchone()
 
         if receiver:
             c.execute(
-                "SELECT * FROM wishes WHERE participant_id = ?;",
+                "SELECT * FROM wishes WHERE participant_id = %s;",
                 (receiver["id"],)
             )
             receiver_wishes = c.fetchone()
@@ -400,7 +421,7 @@ def foods():
             c.execute(
                 """
                 INSERT INTO foods (person_name, title, description, image_filename)
-                VALUES (?, ?, ?, ?);
+                VALUES (%s, %s, %s, %s);
                 """,
                 (person_name, title, description, img_filename)
             )
@@ -409,6 +430,7 @@ def foods():
         else:
             flash("El título de la comida es obligatorio.", "danger")
 
+        conn.close()
         return redirect(url_for("foods"))
 
     c.execute("SELECT * FROM foods ORDER BY id DESC;")
@@ -424,7 +446,7 @@ def edit_food(food_id):
     conn = get_db()
     c = conn.cursor()
 
-    c.execute("SELECT * FROM foods WHERE id = ?;", (food_id,))
+    c.execute("SELECT * FROM foods WHERE id = %s;", (food_id,))
     food = c.fetchone()
 
     if not food:
@@ -438,8 +460,8 @@ def edit_food(food_id):
         description = request.form.get("description", "").strip()
 
         if not title:
-            flash("El nombre del platillo es obligatorio.", "danger")
             conn.close()
+            flash("El nombre del platillo es obligatorio.", "danger")
             return redirect(url_for("edit_food", food_id=food_id))
 
         img_filename = food["image_filename"]
@@ -462,8 +484,8 @@ def edit_food(food_id):
         c.execute(
             """
             UPDATE foods
-            SET person_name = ?, title = ?, description = ?, image_filename = ?
-            WHERE id = ?;
+            SET person_name = %s, title = %s, description = %s, image_filename = %s
+            WHERE id = %s;
             """,
             (person_name, title, description, img_filename, food_id)
         )
@@ -484,7 +506,7 @@ def delete_food(food_id):
     c = conn.cursor()
 
     # Buscar la imagen para borrarla del disco
-    c.execute("SELECT image_filename FROM foods WHERE id = ?;", (food_id,))
+    c.execute("SELECT image_filename FROM foods WHERE id = %s;", (food_id,))
     row = c.fetchone()
     if row and row["image_filename"]:
         img_path = os.path.join(app.config["UPLOAD_FOLDER"], row["image_filename"])
@@ -495,7 +517,7 @@ def delete_food(food_id):
                 pass  # si falla, no pasa nada grave
 
     # Borrar el registro de la BD
-    c.execute("DELETE FROM foods WHERE id = ?;", (food_id,))
+    c.execute("DELETE FROM foods WHERE id = %s;", (food_id,))
     conn.commit()
     conn.close()
 
