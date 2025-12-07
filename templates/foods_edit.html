@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Editar platillo{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>✏️ Editar platillo</h2>
+  <p>Ajusta el nombre, la descripción o la foto de referencia del platillo.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    <label for="person_name">Nombre de la persona</label>
+    <input type="text" name="person_name" id="person_name"
+           value="{{ food.person_name }}" required>
+
+    <label for="title">Nombre del platillo</label>
+    <input type="text" name="title" id="title"
+           value="{{ food.title }}" required>
+
+    <label for="description">Descripción (opcional)</label>
+    <textarea name="description" id="description" rows="3">{{ food.description or '' }}</textarea>
+
+    <label for="food_img">Nueva foto (opcional)</label>
+    <input type="file" name="food_img" id="food_img" accept="image/*">
+
+    {% if food.image_filename %}
+      <p style="margin-top:10px;">Foto actual:</p>
+      <img class="wish-img"
+           src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+           alt="Foto actual del platillo">
+    {% endif %}
+
+    <button type="submit" class="btn-small btn-edit">💾 Guardar cambios</button>
+    <a href="{{ url_for('foods') }}" class="btn-small btn-cancel" style="margin-left:8px;">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Mi intercambio{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>🎁 Hola {{ user.name }} — Tu intercambio</h2>
+
+  {% if receiver %}
+    <p>Te tocó darle regalo a:</p>
+    <h3>{{ receiver.name }}</h3>
+
+    {% if receiver_wishes %}
+      <h4>Sus deseos 🎄</h4>
+
+      {% if receiver_wishes.wish1 %}
+        <div class="wish-option">
+          <div class="wish-text">
+            <strong>Opción 1:</strong> {{ receiver_wishes.wish1 }}
+          </div>
+          {% if receiver_wishes.wish1_img %}
+            <img class="wish-img"
+                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
+                 alt="Opción 1 de {{ receiver.name }}">
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if receiver_wishes.wish2 %}
+        <div class="wish-option">
+          <div class="wish-text">
+            <strong>Opción 2:</strong> {{ receiver_wishes.wish2 }}
+          </div>
+          {% if receiver_wishes.wish2_img %}
+            <img class="wish-img"
+                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
+                 alt="Opción 2 de {{ receiver.name }}">
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if not receiver_wishes.wish1 and not receiver_wishes.wish2 %}
+        <p>Aún no ha agregado opciones de regalo.</p>
+      {% endif %}
+    {% else %}
+      <p><em>{{ receiver.name }}</em> aún no agrega su lista de deseos.</p>
+    {% endif %}
+  {% else %}
+    <p>No tienes asignación registrada.</p>
+  {% endif %}
+</div>
+{% endblock %}

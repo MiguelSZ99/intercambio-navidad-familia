@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar sesión{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>🔐 Acceso al intercambio</h2>
+  <p>Selecciona tu nombre y escribe tu código secreto.</p>
+
+  <form method="post">
+
+    <!-- Campo oculto para saber a dónde enviar al usuario después del login -->
+    <input type="hidden" name="next" value="{{ request.args.get('next', 'dashboard') }}">
+
+    <label for="participant_id">Tu nombre</label>
+    <select name="participant_id" id="participant_id" required>
+      <option value="">-- Selecciona tu nombre --</option>
+      {% for p in participants %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="code">Tu código secreto</label>
+    <input type="password" name="code" id="code" placeholder="Ejemplo: 123" required>
+
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

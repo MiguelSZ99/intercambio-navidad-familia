@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Navidad Familia Soancatl (S)Zacamitzin{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      background: #0b1724;
+      color: #fff;
+    }
+    header {
+      background: linear-gradient(135deg, #a81e1e, #0b1724);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header img {
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+    header p {
+      margin: 2px 0 0;
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+    nav {
+      background: #09111b;
+      padding: 8px 16px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    nav a {
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #1b2836;
+    }
+    nav a:hover {
+      background: #25374c;
+    }
+    main {
+      padding: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #101b2a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .flash {
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+    .flash-danger { background: #8b1e1e; }
+    .flash-success { background: #1f6f3f; }
+    .flash-info { background: #1f3f6f; }
+    label {
+      font-size: 0.9rem;
+      display: block;
+      margin-top: 8px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: none;
+      margin-top: 2px;
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: #e63946;
+      color: #fff;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #f15b6b;
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 640px) {
+      .grid-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    img.thumb {
+      max-width: 120px;
+      border-radius: 8px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* ===== Bloques con imagen a la derecha (deseos / comidas) ===== */
+    .wish-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-top: 10px;
+      margin-bottom: 18px;
+    }
+    .wish-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .wish-img {
+      width: 220px;
+      height: 220px;
+      border-radius: 12px;
+      object-fit: cover;
+      display: block;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.25);
+      flex-shrink: 0;
+    }
+    @media (max-width: 640px) {
+      .wish-option {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .wish-img {
+        width: 100%;
+        max-width: 260px;
+        height: 200px;
+      }
+    }
+
+    /* === ESTILOS DE BOTONES PROFESIONALES === */
+    .btn-small {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      transition: 0.2s;
+      display: inline-block;
+    }
+
+    /* Botón editar */
+    .btn-edit {
+      background: #e2b714;
+      color: #000;
+    }
+    .btn-edit:hover {
+      background: #ffdf4d;
+    }
+
+    /* Botón eliminar */
+    .btn-delete {
+      background: #d62828;
+      color: white;
+    }
+    .btn-delete:hover {
+      background: #ff4d4d;
+    }
+
+    /* Botón cancelar */
+    .btn-cancel {
+      background: #555;
+      color: white;
+    }
+    .btn-cancel:hover {
+      background: #777;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='img/portada_familia.jpg') }}" alt="Familia Soancatl Zacamitzin">
+    <div>
+      <h1>Navidad Familia Soancatl (S)Zacamitzin 🎄</h1>
+      <p>Invitación especial para el 24 de diciembre: regalos, cena y mucho amor familiar.</p>
+    </div>
+
+    <!-- Audio navideño -->
+    <audio id="navidadPlayer"
+           controls
+           autoplay
+           loop
+           muted
+           playsinline
+           style="margin-left:auto; max-width:200px;">
+      <source src="{{ url_for('static', filename='navidad.mp3') }}" type="audio/mpeg">
+      Tu navegador no soporta audio.
+    </audio>
+  </header>
+
+  <nav>
+    <a href="{{ url_for('index') }}">🏠 Inicio</a>
+    <a href="{{ url_for('login', next='gift') }}">🎁 Ver mi intercambio</a>
+    <a href="{{ url_for('login', next='dashboard') }}">📝 Mi lista de deseos</a>
+    <a href="{{ url_for('foods') }}">🍽️ Comidas</a>
+    {% if session.get('user_id') %}
+      <a href="{{ url_for('logout') }}">🚪 Cerrar sesión</a>
+    {% endif %}
+  </nav>
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Script para:
+       - restaurar la posición del audio entre páginas
+       - activar el sonido al primer clic/toque -->
+  <script>
+    (function () {
+      const audio = document.getElementById("navidadPlayer");
+      if (!audio) return;
+
+      // Claves para localStorage
+      const KEY_TIME = "navidadAudioTime";
+      const KEY_ENABLED = "navidadAudioEnabled";
+
+      // Restaurar estado al cargar
+      function restoreAudioState() {
+        try {
+          const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
+          const enabled = localStorage.getItem(KEY_ENABLED) === "true";
+
+          if (!isNaN(savedTime) && savedTime > 0) {
+            // Pequeño delay para asegurar que el audio tiene metadata
+            audio.addEventListener("loadedmetadata", () => {
+              if (savedTime < audio.duration) {
+                audio.currentTime = savedTime;
+              }
+            }, { once: true });
+          }
+
+          // Intentar reproducir (muteado o con sonido si ya estaba habilitado)
+          audio.muted = !enabled;
+          audio.play().catch(() => {});
+        } catch (e) {
+          audio.play().catch(() => {});
+        }
+      }
+
+      // Guardar el tiempo cada cierto rato
+      audio.addEventListener("timeupdate", () => {
+        try {
+          localStorage.setItem(KEY_TIME, audio.currentTime.toString());
+        } catch (e) {}
+      });
+
+      // Guardar si el usuario activó el sonido
+      audio.addEventListener("play", () => {
+        try {
+          localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
+        } catch (e) {}
+      });
+
+      // Activar sonido al primer clic/toque si estaba muteado
+      function enableOnFirstInteraction() {
+        if (!audio.muted) return;
+        audio.muted = false;
+        audio.play().catch(() => {});
+        try {
+          localStorage.setItem(KEY_ENABLED, "true");
+        } catch (e) {}
+
+        document.removeEventListener("click", enableOnFirstInteraction);
+        document.removeEventListener("touchstart", enableOnFirstInteraction);
+      }
+
+      document.addEventListener("click", enableOnFirstInteraction);
+      document.addEventListener("touchstart", enableOnFirstInteraction);
+
+      // Restaurar cuando esté listo el DOM
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", restoreAudioState);
+      } else {
+        restoreAudioState();
+      }
+    })();
+  </script>
+</body>
+</html>
