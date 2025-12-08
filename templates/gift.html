@@ -13,28 +13,38 @@
     {% if receiver_wishes %}
       <h4>Sus deseos 🎄</h4>
 
+      {# --------- OPCIÓN 1 --------- #}
       {% if receiver_wishes.wish1 %}
         <div class="wish-option">
           <div class="wish-text">
             <strong>Opción 1:</strong> {{ receiver_wishes.wish1 }}
           </div>
+
           {% if receiver_wishes.wish1_img %}
-            <img class="wish-img"
-                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
-                 alt="Opción 1 de {{ receiver.name }}">
+            <img
+              class="wish-img"
+              src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
+              data-fullsrc="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
+              alt="Opción 1 de {{ receiver.name }}"
+            >
           {% endif %}
         </div>
       {% endif %}
 
+      {# --------- OPCIÓN 2 --------- #}
       {% if receiver_wishes.wish2 %}
         <div class="wish-option">
           <div class="wish-text">
             <strong>Opción 2:</strong> {{ receiver_wishes.wish2 }}
           </div>
+
           {% if receiver_wishes.wish2_img %}
-            <img class="wish-img"
-                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
-                 alt="Opción 2 de {{ receiver.name }}">
+            <img
+              class="wish-img"
+              src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
+              data-fullsrc="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
+              alt="Opción 2 de {{ receiver.name }}"
+            >
           {% endif %}
         </div>
       {% endif %}
@@ -42,6 +52,10 @@
       {% if not receiver_wishes.wish1 and not receiver_wishes.wish2 %}
         <p>Aún no ha agregado opciones de regalo.</p>
       {% endif %}
+
+      <p style="font-size:0.85rem; opacity:0.85; margin-top:8px;">
+        👉 Puedes hacer clic en las imágenes para verlas en grande y luego volver a hacer clic para cerrarlas.
+      </p>
     {% else %}
       <p><em>{{ receiver.name }}</em> aún no agrega su lista de deseos.</p>
     {% endif %}
