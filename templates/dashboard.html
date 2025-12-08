@@ -1,70 +1,66 @@
 {% extends "base.html" %}
 
-{% block title %}Mi lista de deseos{% endblock %}
+{% block title %}Mi intercambio{% endblock %}
 
 {% block content %}
 <div class="card">
-  <h2>📝 Hola {{ user.name }} — Esta es tu lista de deseos 🎄</h2>
-  <p>
-    Aquí escribe qué te gustaría recibir en el intercambio. 
-    Solo la persona que te va a regalar podrá verlo 🤫.
-  </p>
+  <h2>🎁 Hola {{ user.name }} — Tu intercambio</h2>
 
-  <form method="post" enctype="multipart/form-data">
-    <!-- OPCIÓN 1 -->
-    <label for="wish1">✨ Opción 1 (prioridad)</label>
-    <textarea name="wish1" id="wish1" rows="2"
-      placeholder="Ej. Sudadera Adidas talla M color negro">{{ my_wishes.wish1 if my_wishes else '' }}</textarea>
+  {% if receiver %}
+    <p>Te tocó darle regalo a:</p>
+    <h3>{{ receiver.name }}</h3>
 
-    <label for="wish1_img">📸 Foto de la opción 1 (opcional)</label>
-    <input type="file" name="wish1_img" id="wish1_img" accept="image/*">
+    {% if receiver_wishes %}
+      <h4>Sus deseos 🎄</h4>
 
-    {% if my_wishes and my_wishes.wish1_img %}
-      <div class="wish-option">
-        <div class="wish-text">
-          <strong>Vista previa de tu opción 1</strong>
+      {% if receiver_wishes.wish1 %}
+        <div class="wish-option">
+          <div class="wish-text">
+            <strong>Opción 1:</strong> {{ receiver_wishes.wish1 }}
+            {% if receiver_wishes.wish1_img %}
+              <div style="font-size:0.8rem; opacity:0.8; margin-top:4px;">
+                (Haz clic en la imagen para verla completa en grande)
+              </div>
+            {% endif %}
+          </div>
+
+          {% if receiver_wishes.wish1_img %}
+            <img class="wish-img"
+                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
+                 alt="Opción 1 de {{ receiver.name }}"
+                 onclick="openImgModal(this.src)">
+          {% endif %}
         </div>
-        <img class="wish-img" 
-             src="{{ url_for('static', filename='uploads/' ~ my_wishes.wish1_img) }}" 
-             alt="Mi opción 1">
-      </div>
-    {% endif %}
+      {% endif %}
 
-    <hr style="margin: 20px 0; border: 0.5px solid rgba(255,255,255,0.15);">
+      {% if receiver_wishes.wish2 %}
+        <div class="wish-option">
+          <div class="wish-text">
+            <strong>Opción 2:</strong> {{ receiver_wishes.wish2 }}
+            {% if receiver_wishes.wish2_img %}
+              <div style="font-size:0.8rem; opacity:0.8; margin-top:4px;">
+                (Haz clic en la imagen para verla completa en grande)
+              </div>
+            {% endif %}
+          </div>
 
-    <!-- OPCIÓN 2 -->
-    <label for="wish2">🎁 Opción 2 (por si no se encuentra la primera)</label>
-    <textarea name="wish2" id="wish2" rows="2"
-      placeholder="Ej. Perfume, libro, audífonos, etc.">{{ my_wishes.wish2 if my_wishes else '' }}</textarea>
-
-    <label for="wish2_img">📸 Foto de la opción 2 (opcional)</label>
-    <input type="file" name="wish2_img" id="wish2_img" accept="image/*">
-
-    {% if my_wishes and my_wishes.wish2_img %}
-      <div class="wish-option">
-        <div class="wish-text">
-          <strong>Vista previa de tu opción 2</strong>
+          {% if receiver_wishes.wish2_img %}
+            <img class="wish-img"
+                 src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
+                 alt="Opción 2 de {{ receiver.name }}"
+                 onclick="openImgModal(this.src)">
+          {% endif %}
         </div>
-        <img class="wish-img"
-             src="{{ url_for('static', filename='uploads/' ~ my_wishes.wish2_img) }}" 
-             alt="Mi opción 2">
-      </div>
+      {% endif %}
+
+      {% if not receiver_wishes.wish1 and not receiver_wishes.wish2 %}
+        <p>Aún no ha agregado opciones de regalo.</p>
+      {% endif %}
+    {% else %}
+      <p><em>{{ receiver.name }}</em> aún no agrega su lista de deseos.</p>
     {% endif %}
-
-    <!-- BOTÓN GUARDAR / EDITAR -->
-    <button type="submit">💾 Guardar / actualizar mi lista de deseos</button>
-  </form>
-
-  {% if my_wishes %}
-    <!-- BOTÓN BORRAR LISTA DE DESEOS -->
-    <form method="post"
-          action="{{ url_for('delete_wishes') }}"
-          style="margin-top: 12px;"
-          onsubmit="return confirm('¿Seguro que quieres borrar toda tu lista de deseos (texto y fotos)?');">
-      <button type="submit" class="btn-small btn-delete">
-        🗑️ Borrar toda mi lista de deseos
-      </button>
-    </form>
+  {% else %}
+    <p>No tienes asignación registrada.</p>
   {% endif %}
 </div>
 {% endblock %}

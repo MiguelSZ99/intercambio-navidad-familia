@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
   <h2>✏️ Editar platillo</h2>
-  <p>Ajusta el nombre, la descripción o la foto de referencia del platillo.</p>
+  <p>Ajusta el nombre, la descripción o la foto del platillo que vas a llevar.</p>
 
   <form method="post" enctype="multipart/form-data">
     <label for="person_name">Nombre de la persona</label>
@@ -23,13 +23,21 @@
     <input type="file" name="food_img" id="food_img" accept="image/*">
 
     {% if food.image_filename %}
-      <p style="margin-top:10px;">Foto actual:</p>
-      <img class="wish-img"
-           src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-           alt="Foto actual del platillo">
+      <div style="margin-top:15px;">
+        <p style="margin:0 0 6px;">📸 Foto actual:</p>
+
+        <img class="wish-img"
+             src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+             alt="Foto del platillo actual"
+             onclick="openImgModal(this.src)">
+
+        <div style="font-size:0.75rem; opacity:0.7; margin-top:4px;">
+          (Toca la imagen para verla completa)
+        </div>
+      </div>
     {% endif %}
 
-    <button type="submit" class="btn-small btn-edit">💾 Guardar cambios</button>
+    <button type="submit" class="btn-small btn-edit" style="margin-top:16px;">💾 Guardar cambios</button>
     <a href="{{ url_for('foods') }}" class="btn-small btn-cancel" style="margin-left:8px;">Cancelar</a>
   </form>
 </div>

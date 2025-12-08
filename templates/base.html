@@ -130,25 +130,29 @@
       word-wrap: break-word;
       overflow-wrap: anywhere;
     }
+
+    /* 👇 AQUI cambio: que se vea toda la imagen, y se note que es clickeable */
     .wish-img {
-      width: 220px;
-      height: 220px;
+      max-width: 220px;
+      max-height: 220px;
+      width: auto;
+      height: auto;
       border-radius: 12px;
-      object-fit: cover;
       display: block;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
+      cursor: pointer; /* mano al pasar el mouse */
     }
+
     @media (max-width: 640px) {
       .wish-option {
         flex-direction: column;
         align-items: flex-start;
       }
       .wish-img {
-        width: 100%;
         max-width: 260px;
-        height: 200px;
+        max-height: 260px;
       }
     }
 
@@ -235,77 +239,86 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Script para:
-       - restaurar la posición del audio entre páginas
-       - activar el sonido al primer clic/toque -->
+  <!-- 🔍 Modal para ver imagen en grande -->
+  <div id="imgModal"
+       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
+              justify-content:center; align-items:center; z-index:9999;">
+    <img id="modalImg"
+         style="max-width:90%; max-height:90%; border-radius:12px;">
+  </div>
+
+  <!-- Script: audio continuo + modal de imágenes -->
   <script>
     (function () {
       const audio = document.getElementById("navidadPlayer");
-      if (!audio) return;
+      if (audio) {
+        const KEY_TIME = "navidadAudioTime";
+        const KEY_ENABLED = "navidadAudioEnabled";
 
-      // Claves para localStorage
-      const KEY_TIME = "navidadAudioTime";
-      const KEY_ENABLED = "navidadAudioEnabled";
+        function restoreAudioState() {
+          try {
+            const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
+            const enabled = localStorage.getItem(KEY_ENABLED) === "true";
 
-      // Restaurar estado al cargar
-      function restoreAudioState() {
-        try {
-          const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
-          const enabled = localStorage.getItem(KEY_ENABLED) === "true";
+            if (!isNaN(savedTime) && savedTime > 0) {
+              audio.addEventListener("loadedmetadata", () => {
+                if (!isNaN(audio.duration) && savedTime < audio.duration) {
+                  audio.currentTime = savedTime;
+                }
+              }, { once: true });
+            }
 
-          if (!isNaN(savedTime) && savedTime > 0) {
-            // Pequeño delay para asegurar que el audio tiene metadata
-            audio.addEventListener("loadedmetadata", () => {
-              if (savedTime < audio.duration) {
-                audio.currentTime = savedTime;
-              }
-            }, { once: true });
+            audio.muted = !enabled;
+            audio.play().catch(() => {});
+          } catch (e) {
+            audio.play().catch(() => {});
           }
+        }
 
-          // Intentar reproducir (muteado o con sonido si ya estaba habilitado)
-          audio.muted = !enabled;
+        audio.addEventListener("timeupdate", () => {
+          try {
+            localStorage.setItem(KEY_TIME, audio.currentTime.toString());
+          } catch (e) {}
+        });
+
+        audio.addEventListener("play", () => {
+          try {
+            localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
+          } catch (e) {}
+        });
+
+        function enableOnFirstInteraction() {
+          if (!audio.muted) return;
+          audio.muted = false;
           audio.play().catch(() => {});
-        } catch (e) {
-          audio.play().catch(() => {});
+          try {
+            localStorage.setItem(KEY_ENABLED, "true");
+          } catch (e) {}
+          document.removeEventListener("click", enableOnFirstInteraction);
+          document.removeEventListener("touchstart", enableOnFirstInteraction);
+        }
+
+        document.addEventListener("click", enableOnFirstInteraction);
+        document.addEventListener("touchstart", enableOnFirstInteraction);
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", restoreAudioState);
+        } else {
+          restoreAudioState();
         }
       }
 
-      // Guardar el tiempo cada cierto rato
-      audio.addEventListener("timeupdate", () => {
-        try {
-          localStorage.setItem(KEY_TIME, audio.currentTime.toString());
-        } catch (e) {}
+      // ==== LÓGICA DEL MODAL DE IMÁGENES ====
+      window.openImgModal = function (src) {
+        const modal = document.getElementById("imgModal");
+        const img = document.getElementById("modalImg");
+        img.src = src;
+        modal.style.display = "flex";
+      };
+
+      document.getElementById("imgModal").addEventListener("click", () => {
+        document.getElementById("imgModal").style.display = "none";
       });
-
-      // Guardar si el usuario activó el sonido
-      audio.addEventListener("play", () => {
-        try {
-          localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
-        } catch (e) {}
-      });
-
-      // Activar sonido al primer clic/toque si estaba muteado
-      function enableOnFirstInteraction() {
-        if (!audio.muted) return;
-        audio.muted = false;
-        audio.play().catch(() => {});
-        try {
-          localStorage.setItem(KEY_ENABLED, "true");
-        } catch (e) {}
-
-        document.removeEventListener("click", enableOnFirstInteraction);
-        document.removeEventListener("touchstart", enableOnFirstInteraction);
-      }
-
-      document.addEventListener("click", enableOnFirstInteraction);
-      document.addEventListener("touchstart", enableOnFirstInteraction);
-
-      // Restaurar cuando esté listo el DOM
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", restoreAudioState);
-      } else {
-        restoreAudioState();
-      }
     })();
   </script>
 </body>
