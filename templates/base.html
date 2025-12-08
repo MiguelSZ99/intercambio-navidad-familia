@@ -54,7 +54,7 @@
     main {
       padding: 16px;
       max-width: 900px;
-      margin: 0 auto 60px auto;
+      margin: 0 auto;
     }
     .card {
       background: #101b2a;
@@ -72,7 +72,6 @@
     .flash-danger { background: #8b1e1e; }
     .flash-success { background: #1f6f3f; }
     .flash-info { background: #1f3f6f; }
-
     label {
       font-size: 0.9rem;
       display: block;
@@ -101,7 +100,17 @@
       background: #f15b6b;
     }
 
-    /* ===== Bloques con imagen a la derecha (deseos / comidas) ===== */
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 640px) {
+      .grid-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* ===== Bloques con imagen a la derecha (deseos / comidas / intercambio) ===== */
     .wish-option {
       display: flex;
       align-items: flex-start;
@@ -118,18 +127,18 @@
       overflow-wrap: anywhere;
     }
 
-    /* Imagen en tarjeta (que se ve completa) */
+    /* Miniatura cuadrada donde se vea la imagen COMPLETA */
     .wish-img {
       width: 220px;
       height: 220px;
       border-radius: 12px;
-      object-fit: contain;  /* <- ahora se ve COMPLETA */
-      background: #000;     /* marquito negro si sobra espacio */
+      object-fit: contain;           /* <- para que se vea toda la foto */
+      background: #050b12;
       display: block;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
-      cursor: zoom-in;      /* para que se note que es clickeable */
+      cursor: pointer;              /* mano para indicar que se puede tocar */
     }
 
     @media (max-width: 640px) {
@@ -144,7 +153,7 @@
       }
     }
 
-    /* === Botones pequeños === */
+    /* === ESTILOS DE BOTONES PROFESIONALES === */
     .btn-small {
       padding: 6px 14px;
       border-radius: 6px;
@@ -155,24 +164,33 @@
       transition: 0.2s;
       display: inline-block;
     }
+
     .btn-edit {
       background: #e2b714;
       color: #000;
     }
-    .btn-edit:hover { background: #ffdf4d; }
+    .btn-edit:hover {
+      background: #ffdf4d;
+    }
+
     .btn-delete {
       background: #d62828;
-      color: #fff;
+      color: white;
     }
-    .btn-delete:hover { background: #ff4d4d; }
+    .btn-delete:hover {
+      background: #ff4d4d;
+    }
+
     .btn-cancel {
       background: #555;
-      color: #fff;
+      color: white;
     }
-    .btn-cancel:hover { background: #777; }
+    .btn-cancel:hover {
+      background: #777;
+    }
 
-    /* ===== MODAL PARA IMAGEN GRANDE ===== */
-    .img-modal {
+    /* ===== MODAL PARA VER IMAGEN EN GRANDE ===== */
+    .img-modal-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.85);
@@ -180,8 +198,9 @@
       align-items: center;
       justify-content: center;
       z-index: 9999;
+      padding: 16px;
     }
-    .img-modal.open {
+    .img-modal-overlay.show {
       display: flex;
     }
     .img-modal-content {
@@ -190,21 +209,21 @@
       max-height: 90vh;
     }
     .img-modal-content img {
-      display: block;
       max-width: 100%;
-      max-height: 90vh;
+      max-height: 100%;
       border-radius: 12px;
-      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+      display: block;
     }
     .img-modal-close {
       position: absolute;
-      top: -10px;
-      right: -10px;
-      background: #e63946;
-      border-radius: 999px;
-      border: none;
+      top: -12px;
+      right: -12px;
       width: 32px;
       height: 32px;
+      border-radius: 999px;
+      border: none;
+      background: rgba(0,0,0,0.75);
       color: #fff;
       font-size: 1.1rem;
       cursor: pointer;
@@ -254,18 +273,17 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- MODAL DE IMAGEN GRANDE -->
-  <div class="img-modal" id="imgModal">
+  <!-- MODAL PARA IMAGEN EN GRANDE -->
+  <div id="imgModal" class="img-modal-overlay">
     <div class="img-modal-content">
-      <button class="img-modal-close" id="imgModalClose">&times;</button>
+      <button class="img-modal-close" aria-label="Cerrar imagen">&times;</button>
       <img id="imgModalImg" src="" alt="Vista ampliada">
     </div>
   </div>
 
-  <!-- Script: audio + imágenes grandes -->
+  <!-- Script audio + script de zoom de imágenes -->
   <script>
     (function () {
-      /* ==== AUDIO PERSISTENTE ==== */
       const audio = document.getElementById("navidadPlayer");
       if (audio) {
         const KEY_TIME = "navidadAudioTime";
@@ -276,11 +294,13 @@
             const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
             const enabled = localStorage.getItem(KEY_ENABLED) === "true";
 
-            audio.addEventListener("loadedmetadata", () => {
-              if (!isNaN(savedTime) && savedTime > 0 && savedTime < audio.duration) {
-                audio.currentTime = savedTime;
-              }
-            }, { once: true });
+            if (!isNaN(savedTime) && savedTime > 0) {
+              audio.addEventListener("loadedmetadata", () => {
+                if (savedTime < audio.duration) {
+                  audio.currentTime = savedTime;
+                }
+              }, { once: true });
+            }
 
             audio.muted = !enabled;
             audio.play().catch(() => {});
@@ -290,18 +310,24 @@
         }
 
         audio.addEventListener("timeupdate", () => {
-          try { localStorage.setItem(KEY_TIME, audio.currentTime.toString()); } catch (e) {}
+          try {
+            localStorage.setItem(KEY_TIME, audio.currentTime.toString());
+          } catch (e) {}
         });
 
         audio.addEventListener("play", () => {
-          try { localStorage.setItem(KEY_ENABLED, (!audio.muted).toString()); } catch (e) {}
+          try {
+            localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
+          } catch (e) {}
         });
 
         function enableOnFirstInteraction() {
           if (!audio.muted) return;
           audio.muted = false;
           audio.play().catch(() => {});
-          try { localStorage.setItem(KEY_ENABLED, "true"); } catch (e) {}
+          try {
+            localStorage.setItem(KEY_ENABLED, "true");
+          } catch (e) {}
 
           document.removeEventListener("click", enableOnFirstInteraction);
           document.removeEventListener("touchstart", enableOnFirstInteraction);
@@ -317,20 +343,19 @@
         }
       }
 
-      /* ==== IMÁGENES QUE SE AGRANDAN ==== */
+      // ---------- ZOOM DE IMÁGENES ----------
       const modal = document.getElementById("imgModal");
       const modalImg = document.getElementById("imgModalImg");
-      const modalClose = document.getElementById("imgModalClose");
+      const closeBtn = modal ? modal.querySelector(".img-modal-close") : null;
 
       function openModal(src) {
         if (!modal || !modalImg) return;
         modalImg.src = src;
-        modal.classList.add("open");
+        modal.classList.add("show");
       }
-
       function closeModal() {
         if (!modal || !modalImg) return;
-        modal.classList.remove("open");
+        modal.classList.remove("show");
         modalImg.src = "";
       }
 
@@ -341,26 +366,29 @@
           }
         });
       }
-      if (modalClose) {
-        modalClose.addEventListener("click", closeModal);
+      if (closeBtn) {
+        closeBtn.addEventListener("click", closeModal);
       }
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
 
-      // Todas las imágenes con data-fullsrc serán clickeables
-      function attachImageListeners() {
-        const imgs = document.querySelectorAll(".wish-img[data-fullsrc]");
-        imgs.forEach(img => {
+      // Cualquier imagen con .zoomable-image o .wish-img es clickeable
+      document.addEventListener("DOMContentLoaded", () => {
+        const imgs = document.querySelectorAll("img.zoomable-image, img.wish-img");
+        imgs.forEach((img) => {
+          const fullSrc =
+            img.getAttribute("data-full") ||
+            img.getAttribute("data-fullsrc") ||
+            img.getAttribute("src");
+
+          img.style.cursor = "pointer";
+
           img.addEventListener("click", () => {
-            const full = img.getAttribute("data-fullsrc") || img.src;
-            openModal(full);
+            if (fullSrc) openModal(fullSrc);
           });
         });
-      }
-
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", attachImageListeners);
-      } else {
-        attachImageListeners();
-      }
+      });
     })();
   </script>
 </body>

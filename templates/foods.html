@@ -37,7 +37,6 @@
         <div class="wish-text">
           <strong>{{ food.title }}</strong>
           &nbsp;— por {{ food.person_name }}
-          
           {% if food.description %}
             <br>
             <span style="font-size:0.9rem; opacity:0.9;">
@@ -62,15 +61,9 @@
         </div>
 
         {% if food.image_filename %}
-          <div>
-            <img class="wish-img"
-                 src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-                 alt="Platillo de {{ food.person_name }}"
-                 onclick="openImgModal(this.src)">
-            <div style="font-size:0.75rem; opacity:0.7; margin-top:4px;">
-              (Toca la imagen para verla completa)
-            </div>
-          </div>
+          <img class="wish-img"
+               src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+               alt="Platillo de {{ food.person_name }}">
         {% endif %}
       </div>
     {% endfor %}
