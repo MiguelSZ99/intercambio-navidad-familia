@@ -130,29 +130,25 @@
       word-wrap: break-word;
       overflow-wrap: anywhere;
     }
-
-    /* 👇 AQUI cambio: que se vea toda la imagen, y se note que es clickeable */
     .wish-img {
-      max-width: 220px;
-      max-height: 220px;
-      width: auto;
-      height: auto;
+      width: 220px;
+      height: 220px;
       border-radius: 12px;
+      object-fit: cover;
       display: block;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
-      cursor: pointer; /* mano al pasar el mouse */
     }
-
     @media (max-width: 640px) {
       .wish-option {
         flex-direction: column;
         align-items: flex-start;
       }
       .wish-img {
+        width: 100%;
         max-width: 260px;
-        max-height: 260px;
+        height: 200px;
       }
     }
 
@@ -167,8 +163,6 @@
       transition: 0.2s;
       display: inline-block;
     }
-
-    /* Botón editar */
     .btn-edit {
       background: #e2b714;
       color: #000;
@@ -176,8 +170,6 @@
     .btn-edit:hover {
       background: #ffdf4d;
     }
-
-    /* Botón eliminar */
     .btn-delete {
       background: #d62828;
       color: white;
@@ -185,14 +177,53 @@
     .btn-delete:hover {
       background: #ff4d4d;
     }
-
-    /* Botón cancelar */
     .btn-cancel {
       background: #555;
       color: white;
     }
     .btn-cancel:hover {
       background: #777;
+    }
+
+    /* ====== OVERLAY PARA ZOOM DE IMÁGENES ====== */
+    .image-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;          /* se activa con JS */
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .image-overlay__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+    }
+    .image-overlay__content {
+      position: relative;
+      max-width: 90vw;
+      max-height: 90vh;
+      z-index: 1;
+    }
+    .image-overlay__content img {
+      max-width: 100%;
+      max-height: 90vh;
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      display: block;
+    }
+    .image-overlay__close {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -239,42 +270,44 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- 🔍 Modal para ver imagen en grande -->
-  <div id="imgModal"
-       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
-              justify-content:center; align-items:center; z-index:9999;">
-    <img id="modalImg"
-         style="max-width:90%; max-height:90%; border-radius:12px;">
+  <!-- Overlay de imagen grande -->
+  <div id="imageOverlay" class="image-overlay">
+    <div class="image-overlay__backdrop"></div>
+    <div class="image-overlay__content">
+      <button type="button" class="image-overlay__close">✕</button>
+      <img id="imageOverlayImg" src="" alt="Vista ampliada">
+    </div>
   </div>
 
-  <!-- Script: audio continuo + modal de imágenes -->
+  <!-- Script audio + zoom imágenes -->
   <script>
     (function () {
       const audio = document.getElementById("navidadPlayer");
-      if (audio) {
-        const KEY_TIME = "navidadAudioTime";
-        const KEY_ENABLED = "navidadAudioEnabled";
+      const KEY_TIME = "navidadAudioTime";
+      const KEY_ENABLED = "navidadAudioEnabled";
 
-        function restoreAudioState() {
-          try {
-            const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
-            const enabled = localStorage.getItem(KEY_ENABLED) === "true";
+      function restoreAudioState() {
+        if (!audio) return;
+        try {
+          const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
+          const enabled = localStorage.getItem(KEY_ENABLED) === "true";
 
-            if (!isNaN(savedTime) && savedTime > 0) {
-              audio.addEventListener("loadedmetadata", () => {
-                if (!isNaN(audio.duration) && savedTime < audio.duration) {
-                  audio.currentTime = savedTime;
-                }
-              }, { once: true });
-            }
-
-            audio.muted = !enabled;
-            audio.play().catch(() => {});
-          } catch (e) {
-            audio.play().catch(() => {});
+          if (!isNaN(savedTime) && savedTime > 0) {
+            audio.addEventListener("loadedmetadata", () => {
+              if (!isNaN(audio.duration) && savedTime < audio.duration) {
+                audio.currentTime = savedTime;
+              }
+            }, { once: true });
           }
-        }
 
+          audio.muted = !enabled;
+          audio.play().catch(() => {});
+        } catch (e) {
+          audio.play().catch(() => {});
+        }
+      }
+
+      if (audio) {
         audio.addEventListener("timeupdate", () => {
           try {
             localStorage.setItem(KEY_TIME, audio.currentTime.toString());
@@ -294,31 +327,59 @@
           try {
             localStorage.setItem(KEY_ENABLED, "true");
           } catch (e) {}
+
           document.removeEventListener("click", enableOnFirstInteraction);
           document.removeEventListener("touchstart", enableOnFirstInteraction);
         }
 
         document.addEventListener("click", enableOnFirstInteraction);
         document.addEventListener("touchstart", enableOnFirstInteraction);
-
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", restoreAudioState);
-        } else {
-          restoreAudioState();
-        }
       }
 
-      // ==== LÓGICA DEL MODAL DE IMÁGENES ====
-      window.openImgModal = function (src) {
-        const modal = document.getElementById("imgModal");
-        const img = document.getElementById("modalImg");
-        img.src = src;
-        modal.style.display = "flex";
-      };
+      /* ==== ZOOM DE IMÁGENES ==== */
+      function setupZoomImages() {
+        const overlay = document.getElementById("imageOverlay");
+        const overlayImg = document.getElementById("imageOverlayImg");
+        const closeBtn = document.querySelector(".image-overlay__close");
+        const backdrop = document.querySelector(".image-overlay__backdrop");
+        if (!overlay || !overlayImg) return;
 
-      document.getElementById("imgModal").addEventListener("click", () => {
-        document.getElementById("imgModal").style.display = "none";
-      });
+        function closeOverlay() {
+          overlay.style.display = "none";
+          overlayImg.src = "";
+        }
+
+        // Abrir al hacer clic en cualquier imagen con clase zoomable-image
+        document.addEventListener("click", function (ev) {
+          const target = ev.target;
+          if (target && target.classList && target.classList.contains("zoomable-image")) {
+            const fullSrc = target.getAttribute("data-full") || target.src;
+            overlayImg.src = fullSrc;
+            overlay.style.display = "flex";
+          }
+        });
+
+        [closeBtn, backdrop].forEach((el) => {
+          if (el) el.addEventListener("click", closeOverlay);
+        });
+
+        document.addEventListener("keydown", function (ev) {
+          if (ev.key === "Escape") {
+            closeOverlay();
+          }
+        });
+      }
+
+      function onReady() {
+        restoreAudioState();
+        setupZoomImages();
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", onReady);
+      } else {
+        onReady();
+      }
     })();
   </script>
 </body>
