@@ -72,6 +72,7 @@
     .flash-danger { background: #8b1e1e; }
     .flash-success { background: #1f6f3f; }
     .flash-info { background: #1f3f6f; }
+
     label {
       font-size: 0.9rem;
       display: block;
@@ -110,6 +111,13 @@
       }
     }
 
+    img.thumb {
+      max-width: 120px;
+      border-radius: 8px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
     /* ===== Bloques con imagen a la derecha (deseos / comidas / intercambio) ===== */
     .wish-option {
       display: flex;
@@ -126,21 +134,17 @@
       word-wrap: break-word;
       overflow-wrap: anywhere;
     }
-
-    /* Miniatura cuadrada donde se vea la imagen COMPLETA */
     .wish-img {
       width: 220px;
       height: 220px;
       border-radius: 12px;
-      object-fit: contain;           /* <- para que se vea toda la foto */
-      background: #050b12;
+      object-fit: cover;
       display: block;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
-      cursor: pointer;              /* mano para indicar que se puede tocar */
+      cursor: pointer; /* para indicar que se puede hacer zoom */
     }
-
     @media (max-width: 640px) {
       .wish-option {
         flex-direction: column;
@@ -149,7 +153,7 @@
       .wish-img {
         width: 100%;
         max-width: 260px;
-        height: 220px;
+        height: 200px;
       }
     }
 
@@ -165,6 +169,7 @@
       display: inline-block;
     }
 
+    /* Botón editar */
     .btn-edit {
       background: #e2b714;
       color: #000;
@@ -173,6 +178,7 @@
       background: #ffdf4d;
     }
 
+    /* Botón eliminar */
     .btn-delete {
       background: #d62828;
       color: white;
@@ -181,6 +187,7 @@
       background: #ff4d4d;
     }
 
+    /* Botón cancelar */
     .btn-cancel {
       background: #555;
       color: white;
@@ -189,7 +196,7 @@
       background: #777;
     }
 
-    /* ===== MODAL PARA VER IMAGEN EN GRANDE ===== */
+    /* ===== MODAL DE IMAGEN EN GRANDE ===== */
     .img-modal-overlay {
       position: fixed;
       inset: 0;
@@ -198,7 +205,6 @@
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      padding: 16px;
     }
     .img-modal-overlay.show {
       display: flex;
@@ -212,21 +218,27 @@
       max-width: 100%;
       max-height: 100%;
       border-radius: 12px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-      display: block;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+      cursor: pointer; /* también se cierra al tocar la imagen grande */
     }
     .img-modal-close {
       position: absolute;
-      top: -12px;
-      right: -12px;
-      width: 32px;
-      height: 32px;
+      top: -20px;
+      right: -20px;
+      width: 48px;
+      height: 48px;
       border-radius: 999px;
       border: none;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.85);
       color: #fff;
-      font-size: 1.1rem;
+      font-size: 1.6rem;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .img-modal-close:hover {
+      background: rgba(255,0,0,0.8);
     }
   </style>
 </head>
@@ -273,122 +285,140 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- MODAL PARA IMAGEN EN GRANDE -->
+  <!-- MODAL PARA IMAGEN EN GRANDE (para TODAS las imágenes de la app) -->
   <div id="imgModal" class="img-modal-overlay">
     <div class="img-modal-content">
-      <button class="img-modal-close" aria-label="Cerrar imagen">&times;</button>
+      <button class="img-modal-close" aria-label="Cerrar imagen">✖</button>
       <img id="imgModalImg" src="" alt="Vista ampliada">
     </div>
   </div>
 
-  <!-- Script audio + script de zoom de imágenes -->
+  <!-- Script 1: Audio navideño continuo entre pantallas -->
   <script>
     (function () {
       const audio = document.getElementById("navidadPlayer");
-      if (audio) {
-        const KEY_TIME = "navidadAudioTime";
-        const KEY_ENABLED = "navidadAudioEnabled";
+      if (!audio) return;
 
-        function restoreAudioState() {
-          try {
-            const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
-            const enabled = localStorage.getItem(KEY_ENABLED) === "true";
+      const KEY_TIME = "navidadAudioTime";
+      const KEY_ENABLED = "navidadAudioEnabled";
 
-            if (!isNaN(savedTime) && savedTime > 0) {
-              audio.addEventListener("loadedmetadata", () => {
-                if (savedTime < audio.duration) {
-                  audio.currentTime = savedTime;
-                }
-              }, { once: true });
-            }
+      function restoreAudioState() {
+        try {
+          const savedTime = parseFloat(localStorage.getItem(KEY_TIME) || "0");
+          const enabled = localStorage.getItem(KEY_ENABLED) === "true";
 
-            audio.muted = !enabled;
-            audio.play().catch(() => {});
-          } catch (e) {
-            audio.play().catch(() => {});
+          if (!isNaN(savedTime) && savedTime > 0) {
+            audio.addEventListener("loadedmetadata", () => {
+              if (!isNaN(audio.duration) && savedTime < audio.duration) {
+                audio.currentTime = savedTime;
+              }
+            }, { once: true });
           }
-        }
 
-        audio.addEventListener("timeupdate", () => {
-          try {
-            localStorage.setItem(KEY_TIME, audio.currentTime.toString());
-          } catch (e) {}
-        });
-
-        audio.addEventListener("play", () => {
-          try {
-            localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
-          } catch (e) {}
-        });
-
-        function enableOnFirstInteraction() {
-          if (!audio.muted) return;
-          audio.muted = false;
+          audio.muted = !enabled;
           audio.play().catch(() => {});
-          try {
-            localStorage.setItem(KEY_ENABLED, "true");
-          } catch (e) {}
-
-          document.removeEventListener("click", enableOnFirstInteraction);
-          document.removeEventListener("touchstart", enableOnFirstInteraction);
-        }
-
-        document.addEventListener("click", enableOnFirstInteraction);
-        document.addEventListener("touchstart", enableOnFirstInteraction);
-
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", restoreAudioState);
-        } else {
-          restoreAudioState();
+        } catch (e) {
+          audio.play().catch(() => {});
         }
       }
 
-      // ---------- ZOOM DE IMÁGENES ----------
+      audio.addEventListener("timeupdate", () => {
+        try {
+          localStorage.setItem(KEY_TIME, audio.currentTime.toString());
+        } catch (e) {}
+      });
+
+      audio.addEventListener("play", () => {
+        try {
+          localStorage.setItem(KEY_ENABLED, (!audio.muted).toString());
+        } catch (e) {}
+      });
+
+      function enableOnFirstInteraction() {
+        if (!audio.muted) return;
+        audio.muted = false;
+        audio.play().catch(() => {});
+
+        try {
+          localStorage.setItem(KEY_ENABLED, "true");
+        } catch (e) {}
+
+        document.removeEventListener("click", enableOnFirstInteraction);
+        document.removeEventListener("touchstart", enableOnFirstInteraction);
+      }
+
+      document.addEventListener("click", enableOnFirstInteraction);
+      document.addEventListener("touchstart", enableOnFirstInteraction);
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", restoreAudioState);
+      } else {
+        restoreAudioState();
+      }
+    })();
+  </script>
+
+  <!-- Script 2: Zoom de imágenes en toda la app -->
+  <script>
+    (function () {
       const modal = document.getElementById("imgModal");
       const modalImg = document.getElementById("imgModalImg");
-      const closeBtn = modal ? modal.querySelector(".img-modal-close") : null;
+      const closeBtn = modal.querySelector(".img-modal-close");
 
       function openModal(src) {
-        if (!modal || !modalImg) return;
         modalImg.src = src;
         modal.classList.add("show");
       }
+
       function closeModal() {
-        if (!modal || !modalImg) return;
         modal.classList.remove("show");
-        modalImg.src = "";
+        setTimeout(() => {
+          modalImg.src = "";
+        }, 200);
       }
 
-      if (modal) {
-        modal.addEventListener("click", (e) => {
-          if (e.target === modal) {
-            closeModal();
-          }
-        });
-      }
-      if (closeBtn) {
-        closeBtn.addEventListener("click", closeModal);
-      }
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeModal();
+      // Cerrar al hacer clic en la imagen grande
+      modalImg.addEventListener("click", closeModal);
+
+      // Cerrar al hacer clic en el fondo oscuro
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) {
+          closeModal();
+        }
       });
 
-      // Cualquier imagen con .zoomable-image o .wish-img es clickeable
-      document.addEventListener("DOMContentLoaded", () => {
-        const imgs = document.querySelectorAll("img.zoomable-image, img.wish-img");
+      // Cerrar con el botón ✖
+      closeBtn.addEventListener("click", closeModal);
+
+      // Cerrar con ESC
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closeModal();
+        }
+      });
+
+      function enableZoomableImages() {
+        const imgs = document.querySelectorAll("img.zoomable-image, img.wish-img, img.thumb");
+
         imgs.forEach((img) => {
           const fullSrc =
             img.getAttribute("data-full") ||
             img.getAttribute("data-fullsrc") ||
-            img.getAttribute("src");
+            img.src;
 
           img.style.cursor = "pointer";
 
           img.addEventListener("click", () => {
-            if (fullSrc) openModal(fullSrc);
+            openModal(fullSrc);
           });
         });
-      });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", enableZoomableImages);
+      } else {
+        enableZoomableImages();
+      }
     })();
   </script>
 </body>
