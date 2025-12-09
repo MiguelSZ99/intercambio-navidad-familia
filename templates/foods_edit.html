@@ -17,18 +17,19 @@
            value="{{ food.title }}" required>
 
     <label for="description">Descripción (opcional)</label>
-    <textarea name="description" id="description" rows="3">
-      {{ food.description or '' }}
-    </textarea>
+    <textarea name="description" id="description" rows="3" style="white-space: pre-line;">{{ food.description or '' }}</textarea>
 
     <label for="food_img">Nueva foto (opcional)</label>
     <input type="file" name="food_img" id="food_img" accept="image/*">
 
     {% if food.image_filename %}
-      <p style="margin-top:10px;">Foto actual:</p>
-      <img class="wish-img"
-           src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-           alt="Foto actual del platillo">
+      <p style="margin-top:10px;">Foto actual (haz clic para ampliarla):</p>
+      <img
+        class="wish-img"
+        src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+        data-fullsrc="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+        alt="Foto actual del platillo"
+      >
     {% endif %}
 
     <button type="submit" class="btn-small btn-edit">

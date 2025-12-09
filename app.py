@@ -8,6 +8,10 @@ from flask import (
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
+# 🔹 NUEVO: Cloudinary
+import cloudinary
+import cloudinary.uploader
+
 # Cargar variables de entorno (.env)
 load_dotenv()
 
@@ -19,6 +23,7 @@ app.config['SECRET_KEY'] = 'cambia-esta-clave-por-una-muy-larga'
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
+# Carpeta local (solo por si corres en tu PC)
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -29,9 +34,50 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 # URL de la base de datos PostgreSQL (Render)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# 🔹 Cloudinary: se activa solo si existe la variable
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
+USE_CLOUDINARY = bool(CLOUDINARY_URL)
 
-def allowed_file(filename):
+if USE_CLOUDINARY:
+    # Si CLOUDINARY_URL está definida, Cloudinary se configura solo
+    cloudinary.config(cloudinary_url=CLOUDINARY_URL)
+
+
+def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# 🔹 Helper para subir imágenes (Cloudinary o disco local)
+def upload_image(file_storage, folder: str) -> str | None:
+    """
+    Sube una imagen y devuelve una URL que se guarda en la BD.
+
+    - Si CLOUDINARY_URL está configurado → sube a Cloudinary y regresa secure_url.
+    - Si no → guarda en /static/uploads y regresa una ruta tipo /static/uploads/archivo.jpg
+    """
+    if not file_storage or not file_storage.filename:
+        return None
+
+    if not allowed_file(file_storage.filename):
+        return None
+
+    filename = secure_filename(file_storage.filename)
+
+    # Usar Cloudinary en Render (o donde esté configurado)
+    if USE_CLOUDINARY:
+        result = cloudinary.uploader.upload(
+            file_storage,
+            folder=folder,
+            public_id=filename.rsplit('.', 1)[0],
+            overwrite=True,
+            resource_type="image"
+        )
+        return result.get("secure_url")
+
+    # Modo local: guardar en /static/uploads
+    local_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file_storage.save(local_path)
+    return f"/static/uploads/{filename}"
 
 
 # -----------------------
@@ -252,38 +298,31 @@ def dashboard():
         wish1 = request.form.get("wish1", "").strip()
         wish2 = request.form.get("wish2", "").strip()
 
-        wish1_img_filename = None
-        wish2_img_filename = None
+        # Partimos de las URLs anteriores (por si no suben nueva foto)
+        wish1_img_url = my_wishes["wish1_img"] if my_wishes else None
+        wish2_img_url = my_wishes["wish2_img"] if my_wishes else None
 
         # Manejar foto para deseo 1
         file1 = request.files.get("wish1_img")
-        if file1 and file1.filename and allowed_file(file1.filename):
-            filename1 = secure_filename(file1.filename)
-            wish1_img_filename = f"w1_{user['id']}_{filename1}"
-            file1.save(os.path.join(app.config["UPLOAD_FOLDER"], wish1_img_filename))
+        new_url1 = upload_image(file1, folder=f"wishes/{user['id']}")
+        if new_url1:
+            wish1_img_url = new_url1
 
         # Manejar foto para deseo 2
         file2 = request.files.get("wish2_img")
-        if file2 and file2.filename and allowed_file(file2.filename):
-            filename2 = secure_filename(file2.filename)
-            wish2_img_filename = f"w2_{user['id']}_{filename2}"
-            file2.save(os.path.join(app.config["UPLOAD_FOLDER"], wish2_img_filename))
+        new_url2 = upload_image(file2, folder=f"wishes/{user['id']}")
+        if new_url2:
+            wish2_img_url = new_url2
 
         # Si ya tiene fila en wishes, actualizar; si no, crear
         if my_wishes:
-            # mantener nombres de archivo anteriores si no se cargó una nueva foto
-            if not wish1_img_filename:
-                wish1_img_filename = my_wishes["wish1_img"]
-            if not wish2_img_filename:
-                wish2_img_filename = my_wishes["wish2_img"]
-
             c.execute(
                 """
                 UPDATE wishes
                 SET wish1 = %s, wish1_img = %s, wish2 = %s, wish2_img = %s
                 WHERE participant_id = %s;
                 """,
-                (wish1, wish1_img_filename, wish2, wish2_img_filename, user["id"])
+                (wish1, wish1_img_url, wish2, wish2_img_url, user["id"])
             )
         else:
             c.execute(
@@ -291,7 +330,7 @@ def dashboard():
                 INSERT INTO wishes (participant_id, wish1, wish1_img, wish2, wish2_img)
                 VALUES (%s, %s, %s, %s, %s);
                 """,
-                (user["id"], wish1, wish1_img_filename, wish2, wish2_img_filename)
+                (user["id"], wish1, wish1_img_url, wish2, wish2_img_url)
             )
 
         conn.commit()
@@ -318,35 +357,16 @@ def delete_wishes():
     conn = get_db()
     c = conn.cursor()
 
-    # Buscar nombres de archivos para borrarlos del disco
+    # Solo borramos el registro de la BD; las imágenes en Cloudinary se pueden
+    # dejar (no se ven en la app porque ya no hay registro).
     c.execute(
-        "SELECT wish1_img, wish2_img FROM wishes WHERE participant_id = %s;",
+        "DELETE FROM wishes WHERE participant_id = %s;",
         (user["id"],)
     )
-    row = c.fetchone()
-
-    if row:
-        for col in ("wish1_img", "wish2_img"):
-            filename = row[col]
-            if filename:
-                path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
-
-        # Borrar registro de desires
-        c.execute(
-            "DELETE FROM wishes WHERE participant_id = %s;",
-            (user["id"],)
-        )
-        conn.commit()
-        flash("Tu lista de deseos se borró correctamente.", "info")
-    else:
-        flash("No tenías lista de deseos guardada.", "info")
-
+    conn.commit()
     conn.close()
+
+    flash("Tu lista de deseos se borró correctamente.", "info")
     return redirect(url_for("dashboard"))
 
 
@@ -410,12 +430,11 @@ def foods():
         if not person_name:
             person_name = user["name"] if user else "Invitado"
 
-        img_filename = None
+        img_url = None
         file = request.files.get("food_img")
-        if file and file.filename and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            img_filename = f"food_{person_name}_{filename}"
-            file.save(os.path.join(app.config["UPLOAD_FOLDER"], img_filename))
+        new_img_url = upload_image(file, folder="foods")
+        if new_img_url:
+            img_url = new_img_url
 
         if title:
             c.execute(
@@ -423,7 +442,7 @@ def foods():
                 INSERT INTO foods (person_name, title, description, image_filename)
                 VALUES (%s, %s, %s, %s);
                 """,
-                (person_name, title, description, img_filename)
+                (person_name, title, description, img_url)
             )
             conn.commit()
             flash("Comida registrada para la cena de Navidad.", "success")
@@ -464,22 +483,12 @@ def edit_food(food_id):
             flash("El nombre del platillo es obligatorio.", "danger")
             return redirect(url_for("edit_food", food_id=food_id))
 
-        img_filename = food["image_filename"]
+        img_url = food["image_filename"]
 
         file = request.files.get("food_img")
-        if file and file.filename and allowed_file(file.filename):
-            # borrar foto anterior si existe
-            if img_filename:
-                old_path = os.path.join(app.config["UPLOAD_FOLDER"], img_filename)
-                if os.path.exists(old_path):
-                    try:
-                        os.remove(old_path)
-                    except OSError:
-                        pass
-
-            filename = secure_filename(file.filename)
-            img_filename = f"food_{person_name}_{filename}"
-            file.save(os.path.join(app.config["UPLOAD_FOLDER"], img_filename))
+        new_img_url = upload_image(file, folder="foods")
+        if new_img_url:
+            img_url = new_img_url
 
         c.execute(
             """
@@ -487,7 +496,7 @@ def edit_food(food_id):
             SET person_name = %s, title = %s, description = %s, image_filename = %s
             WHERE id = %s;
             """,
-            (person_name, title, description, img_filename, food_id)
+            (person_name, title, description, img_url, food_id)
         )
         conn.commit()
         conn.close()
@@ -501,22 +510,12 @@ def edit_food(food_id):
 
 @app.route("/comidas/eliminar/<int:food_id>", methods=["POST"])
 def delete_food(food_id):
-    """Eliminar un platillo (y su imagen si existe)."""
+    """Eliminar un platillo (y su imagen asociada en la app)."""
     conn = get_db()
     c = conn.cursor()
 
-    # Buscar la imagen para borrarla del disco
-    c.execute("SELECT image_filename FROM foods WHERE id = %s;", (food_id,))
-    row = c.fetchone()
-    if row and row["image_filename"]:
-        img_path = os.path.join(app.config["UPLOAD_FOLDER"], row["image_filename"])
-        if os.path.exists(img_path):
-            try:
-                os.remove(img_path)
-            except OSError:
-                pass  # si falla, no pasa nada grave
-
-    # Borrar el registro de la BD
+    # Igual que con deseos: solo borramos el registro; la imagen
+    # puede seguir en Cloudinary sin problema.
     c.execute("DELETE FROM foods WHERE id = %s;", (food_id,))
     conn.commit()
     conn.close()
