@@ -59,10 +59,16 @@
         </div>
 
         {% if food.image_filename %}
+          {% set imgf = food.image_filename %}
+          {% if imgf.startswith('http') %}
+            {% set imgf_url = imgf %}
+          {% else %}
+            {% set imgf_url = url_for('static', filename='uploads/' ~ imgf) %}
+          {% endif %}
           <img
-            class="wish-img"
-            src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-            data-fullsrc="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
+            class="wish-img zoomable-image"
+            src="{{ imgf_url }}"
+            data-fullsrc="{{ imgf_url }}"
             alt="Platillo de {{ food.person_name }}"
           >
         {% endif %}

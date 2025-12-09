@@ -19,10 +19,16 @@
             <strong>Opción 1:</strong> {{ receiver_wishes.wish1 }}
           </div>
           {% if receiver_wishes.wish1_img %}
+            {% set img1 = receiver_wishes.wish1_img %}
+            {% if img1.startswith('http') %}
+              {% set img1_url = img1 %}
+            {% else %}
+              {% set img1_url = url_for('static', filename='uploads/' ~ img1) %}
+            {% endif %}
             <img
-              class="wish-img"
-              src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
-              data-fullsrc="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish1_img) }}"
+              class="wish-img zoomable-image"
+              src="{{ img1_url }}"
+              data-fullsrc="{{ img1_url }}"
               alt="Opción 1 de {{ receiver.name }}"
             >
           {% endif %}
@@ -35,10 +41,16 @@
             <strong>Opción 2:</strong> {{ receiver_wishes.wish2 }}
           </div>
           {% if receiver_wishes.wish2_img %}
+            {% set img2 = receiver_wishes.wish2_img %}
+            {% if img2.startswith('http') %}
+              {% set img2_url = img2 %}
+            {% else %}
+              {% set img2_url = url_for('static', filename='uploads/' ~ img2) %}
+            {% endif %}
             <img
-              class="wish-img"
-              src="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
-              data-fullsrc="{{ url_for('static', filename='uploads/' ~ receiver_wishes.wish2_img) }}"
+              class="wish-img zoomable-image"
+              src="{{ img2_url }}"
+              data-fullsrc="{{ img2_url }}"
               alt="Opción 2 de {{ receiver.name }}"
             >
           {% endif %}

@@ -17,45 +17,28 @@
            value="{{ food.title }}" required>
 
     <label for="description">Descripción (opcional)</label>
-    <textarea name="description" id="description" rows="3" style="white-space: pre-line;">
-      {{ food.description or '' }}
-    </textarea>
+    <textarea name="description" id="description" rows="3" style="white-space: pre-line;">{{ food.description or '' }}</textarea>
 
-    <label for="food_img">Nueva foto (opcional — si subes una nueva, reemplaza la anterior)</label>
+    <label for="food_img">Nueva foto (opcional)</label>
     <input type="file" name="food_img" id="food_img" accept="image/*">
 
     {% if food.image_filename %}
-      <p style="margin-top:10px;">Foto actual (haz clic para ampliarla):</p>
-
-      {% set img = food.image_filename %}
-      {% if img[:4] == 'http' %}
-        <!-- Imagen Cloudinary -->
-        <img
-          class="wish-img zoomable-image"
-          src="{{ img }}"
-          data-full="{{ img }}"
-          alt="Foto actual del platillo"
-        >
+      {% set imgf = food.image_filename %}
+      {% if imgf.startswith('http') %}
+        {% set imgf_url = imgf %}
       {% else %}
-        <!-- Imagen local antigua -->
-        <img
-          class="wish-img zoomable-image"
-          src="{{ url_for('static', filename='uploads/' ~ img) }}"
-          data-full="{{ url_for('static', filename='uploads/' ~ img) }}"
-          alt="Foto actual del platillo"
-        >
+        {% set imgf_url = url_for('static', filename='uploads/' ~ imgf) %}
       {% endif %}
-
-      <!-- Botón eliminar solo imagen -->
-      <form method="post"
-            action="{{ url_for('delete_food_image', food_id=food.id) }}"
-            onsubmit="return confirm('¿Seguro que quieres eliminar solo la imagen? El platillo seguirá registrado.');"
-            style="margin-top:12px;">
-        <button type="submit" class="btn-small btn-delete">🗑️ Borrar solo la imagen</button>
-      </form>
+      <p style="margin-top:10px;">Foto actual (haz clic para ampliarla):</p>
+      <img
+        class="wish-img zoomable-image"
+        src="{{ imgf_url }}"
+        data-fullsrc="{{ imgf_url }}"
+        alt="Foto actual del platillo"
+      >
     {% endif %}
 
-    <button type="submit" class="btn-small btn-edit" style="margin-top:10px;">
+    <button type="submit" class="btn-small btn-edit">
       💾 Guardar cambios
     </button>
 

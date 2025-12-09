@@ -20,15 +20,20 @@
     <input type="file" name="wish1_img" id="wish1_img" accept="image/*">
 
     {% if my_wishes and my_wishes.wish1_img %}
+      {% set img1 = my_wishes.wish1_img %}
+      {% if img1.startswith('http') %}
+        {% set img1_url = img1 %}
+      {% else %}
+        {% set img1_url = url_for('static', filename='uploads/' ~ img1) %}
+      {% endif %}
       <div class="wish-option">
         <div class="wish-text">
           <strong>Vista previa de tu opción 1</strong>
         </div>
-        <!-- Imagen con zoom -->
         <img
           class="wish-img zoomable-image"
-          src="{{ url_for('static', filename='uploads/' ~ my_wishes.wish1_img) }}"
-          data-full="{{ url_for('static', filename='uploads/' ~ my_wishes.wish1_img) }}"
+          src="{{ img1_url }}"
+          data-full="{{ img1_url }}"
           alt="Mi opción 1">
       </div>
     {% endif %}
@@ -44,15 +49,20 @@
     <input type="file" name="wish2_img" id="wish2_img" accept="image/*">
 
     {% if my_wishes and my_wishes.wish2_img %}
+      {% set img2 = my_wishes.wish2_img %}
+      {% if img2.startswith('http') %}
+        {% set img2_url = img2 %}
+      {% else %}
+        {% set img2_url = url_for('static', filename='uploads/' ~ img2) %}
+      {% endif %}
       <div class="wish-option">
         <div class="wish-text">
           <strong>Vista previa de tu opción 2</strong>
         </div>
-        <!-- Imagen con zoom -->
         <img
           class="wish-img zoomable-image"
-          src="{{ url_for('static', filename='uploads/' ~ my_wishes.wish2_img) }}"
-          data-full="{{ url_for('static', filename='uploads/' ~ my_wishes.wish2_img) }}"
+          src="{{ img2_url }}"
+          data-full="{{ img2_url }}"
           alt="Mi opción 2">
       </div>
     {% endif %}
