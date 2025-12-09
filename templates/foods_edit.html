@@ -17,22 +17,45 @@
            value="{{ food.title }}" required>
 
     <label for="description">Descripción (opcional)</label>
-    <textarea name="description" id="description" rows="3" style="white-space: pre-line;">{{ food.description or '' }}</textarea>
+    <textarea name="description" id="description" rows="3" style="white-space: pre-line;">
+      {{ food.description or '' }}
+    </textarea>
 
-    <label for="food_img">Nueva foto (opcional)</label>
+    <label for="food_img">Nueva foto (opcional — si subes una nueva, reemplaza la anterior)</label>
     <input type="file" name="food_img" id="food_img" accept="image/*">
 
     {% if food.image_filename %}
       <p style="margin-top:10px;">Foto actual (haz clic para ampliarla):</p>
-      <img
-        class="wish-img"
-        src="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-        data-fullsrc="{{ url_for('static', filename='uploads/' ~ food.image_filename) }}"
-        alt="Foto actual del platillo"
-      >
+
+      {% set img = food.image_filename %}
+      {% if img[:4] == 'http' %}
+        <!-- Imagen Cloudinary -->
+        <img
+          class="wish-img zoomable-image"
+          src="{{ img }}"
+          data-full="{{ img }}"
+          alt="Foto actual del platillo"
+        >
+      {% else %}
+        <!-- Imagen local antigua -->
+        <img
+          class="wish-img zoomable-image"
+          src="{{ url_for('static', filename='uploads/' ~ img) }}"
+          data-full="{{ url_for('static', filename='uploads/' ~ img) }}"
+          alt="Foto actual del platillo"
+        >
+      {% endif %}
+
+      <!-- Botón eliminar solo imagen -->
+      <form method="post"
+            action="{{ url_for('delete_food_image', food_id=food.id) }}"
+            onsubmit="return confirm('¿Seguro que quieres eliminar solo la imagen? El platillo seguirá registrado.');"
+            style="margin-top:12px;">
+        <button type="submit" class="btn-small btn-delete">🗑️ Borrar solo la imagen</button>
+      </form>
     {% endif %}
 
-    <button type="submit" class="btn-small btn-edit">
+    <button type="submit" class="btn-small btn-edit" style="margin-top:10px;">
       💾 Guardar cambios
     </button>
 
