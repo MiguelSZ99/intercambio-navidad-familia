@@ -8,12 +8,19 @@ from flask import (
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-# 🔹 NUEVO: Cloudinary
+# --- Cloudinary ---
 import cloudinary
 import cloudinary.uploader
 
 # Cargar variables de entorno (.env)
 load_dotenv()
+
+# Configurar Cloudinary a partir de CLOUDINARY_URL
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
+if CLOUDINARY_URL:
+    cloudinary.config(
+        cloudinary_url=CLOUDINARY_URL
+    )
 
 # -----------------------
 # CONFIGURACIÓN BÁSICA
@@ -23,7 +30,7 @@ app.config['SECRET_KEY'] = 'cambia-esta-clave-por-una-muy-larga'
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-# Carpeta local (solo por si corres en tu PC)
+# Carpeta local (ya casi no se usa, pero la dejamos por compatibilidad)
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -34,26 +41,18 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 # URL de la base de datos PostgreSQL (Render)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 🔹 Cloudinary: se activa solo si existe la variable
-CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
-USE_CLOUDINARY = bool(CLOUDINARY_URL)
 
-if USE_CLOUDINARY:
-    # Si CLOUDINARY_URL está definida, Cloudinary se configura solo
-    cloudinary.config(cloudinary_url=CLOUDINARY_URL)
-
-
-def allowed_file(filename: str) -> bool:
+def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-# 🔹 Helper para subir imágenes (Cloudinary o disco local)
-def upload_image(file_storage, folder: str) -> str | None:
+# -----------------------
+# CLOUDINARY HELPER
+# -----------------------
+def upload_to_cloudinary(file_storage, folder_prefix):
     """
-    Sube una imagen y devuelve una URL que se guarda en la BD.
-
-    - Si CLOUDINARY_URL está configurado → sube a Cloudinary y regresa secure_url.
-    - Si no → guarda en /static/uploads y regresa una ruta tipo /static/uploads/archivo.jpg
+    Sube una imagen a Cloudinary y regresa la URL segura.
+    Si algo falla, regresa None y simplemente no actualizamos la imagen.
     """
     if not file_storage or not file_storage.filename:
         return None
@@ -61,23 +60,21 @@ def upload_image(file_storage, folder: str) -> str | None:
     if not allowed_file(file_storage.filename):
         return None
 
-    filename = secure_filename(file_storage.filename)
+    # Nombre "limpio" (sin espacios raros)
+    base_name = secure_filename(file_storage.filename.rsplit('.', 1)[0])
 
-    # Usar Cloudinary en Render (o donde esté configurado)
-    if USE_CLOUDINARY:
+    try:
         result = cloudinary.uploader.upload(
             file_storage,
-            folder=folder,
-            public_id=filename.rsplit('.', 1)[0],
+            folder=f"intercambio-navidad/{folder_prefix}",
+            public_id=base_name,
             overwrite=True,
             resource_type="image"
         )
         return result.get("secure_url")
-
-    # Modo local: guardar en /static/uploads
-    local_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file_storage.save(local_path)
-    return f"/static/uploads/{filename}"
+    except Exception as e:
+        print("Error subiendo a Cloudinary:", e)
+        return None
 
 
 # -----------------------
@@ -116,6 +113,7 @@ def init_db():
     """)
 
     # Tabla de deseos de regalo (dos opciones, con foto opcional)
+    # IMPORTANTE: aquí guardamos la URL completa de Cloudinary
     c.execute("""
         CREATE TABLE IF NOT EXISTS wishes (
             id SERIAL PRIMARY KEY,
@@ -128,7 +126,7 @@ def init_db():
         );
     """)
 
-    # Tabla de comidas
+    # Tabla de comidas (también URL completa de Cloudinary)
     c.execute("""
         CREATE TABLE IF NOT EXISTS foods (
             id SERIAL PRIMARY KEY,
@@ -298,21 +296,21 @@ def dashboard():
         wish1 = request.form.get("wish1", "").strip()
         wish2 = request.form.get("wish2", "").strip()
 
-        # Partimos de las URLs anteriores (por si no suben nueva foto)
-        wish1_img_url = my_wishes["wish1_img"] if my_wishes else None
-        wish2_img_url = my_wishes["wish2_img"] if my_wishes else None
+        # Empezamos con lo que ya hubiera en BD
+        wish1_img = my_wishes["wish1_img"] if my_wishes else None
+        wish2_img = my_wishes["wish2_img"] if my_wishes else None
 
-        # Manejar foto para deseo 1
+        # Manejar foto para deseo 1 (Cloudinary)
         file1 = request.files.get("wish1_img")
-        new_url1 = upload_image(file1, folder=f"wishes/{user['id']}")
+        new_url1 = upload_to_cloudinary(file1, f"deseos/{user['id']}")
         if new_url1:
-            wish1_img_url = new_url1
+            wish1_img = new_url1
 
-        # Manejar foto para deseo 2
+        # Manejar foto para deseo 2 (Cloudinary)
         file2 = request.files.get("wish2_img")
-        new_url2 = upload_image(file2, folder=f"wishes/{user['id']}")
+        new_url2 = upload_to_cloudinary(file2, f"deseos/{user['id']}")
         if new_url2:
-            wish2_img_url = new_url2
+            wish2_img = new_url2
 
         # Si ya tiene fila en wishes, actualizar; si no, crear
         if my_wishes:
@@ -322,7 +320,7 @@ def dashboard():
                 SET wish1 = %s, wish1_img = %s, wish2 = %s, wish2_img = %s
                 WHERE participant_id = %s;
                 """,
-                (wish1, wish1_img_url, wish2, wish2_img_url, user["id"])
+                (wish1, wish1_img, wish2, wish2_img, user["id"])
             )
         else:
             c.execute(
@@ -330,7 +328,7 @@ def dashboard():
                 INSERT INTO wishes (participant_id, wish1, wish1_img, wish2, wish2_img)
                 VALUES (%s, %s, %s, %s, %s);
                 """,
-                (user["id"], wish1, wish1_img_url, wish2, wish2_img_url)
+                (user["id"], wish1, wish1_img, wish2, wish2_img)
             )
 
         conn.commit()
@@ -357,8 +355,7 @@ def delete_wishes():
     conn = get_db()
     c = conn.cursor()
 
-    # Solo borramos el registro de la BD; las imágenes en Cloudinary se pueden
-    # dejar (no se ven en la app porque ya no hay registro).
+    # Borrar registro de desires (no borramos en Cloudinary para no complicar)
     c.execute(
         "DELETE FROM wishes WHERE participant_id = %s;",
         (user["id"],)
@@ -432,9 +429,9 @@ def foods():
 
         img_url = None
         file = request.files.get("food_img")
-        new_img_url = upload_image(file, folder="foods")
-        if new_img_url:
-            img_url = new_img_url
+        new_food_url = upload_to_cloudinary(file, f"comidas/{person_name}")
+        if new_food_url:
+            img_url = new_food_url
 
         if title:
             c.execute(
@@ -486,9 +483,9 @@ def edit_food(food_id):
         img_url = food["image_filename"]
 
         file = request.files.get("food_img")
-        new_img_url = upload_image(file, folder="foods")
-        if new_img_url:
-            img_url = new_img_url
+        new_food_url = upload_to_cloudinary(file, f"comidas/{person_name}")
+        if new_food_url:
+            img_url = new_food_url
 
         c.execute(
             """
@@ -510,12 +507,11 @@ def edit_food(food_id):
 
 @app.route("/comidas/eliminar/<int:food_id>", methods=["POST"])
 def delete_food(food_id):
-    """Eliminar un platillo (y su imagen asociada en la app)."""
+    """Eliminar un platillo (y su imagen si existe)."""
     conn = get_db()
     c = conn.cursor()
 
-    # Igual que con deseos: solo borramos el registro; la imagen
-    # puede seguir en Cloudinary sin problema.
+    # Solo borramos el registro; las imágenes en Cloudinary se quedan (no pasa nada para 30 fotos)
     c.execute("DELETE FROM foods WHERE id = %s;", (food_id,))
     conn.commit()
     conn.close()
