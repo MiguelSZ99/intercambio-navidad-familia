@@ -8,19 +8,12 @@ from flask import (
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-# --- Cloudinary ---
+# 🔹 Cloudinary
 import cloudinary
 import cloudinary.uploader
 
 # Cargar variables de entorno (.env)
 load_dotenv()
-
-# Configurar Cloudinary a partir de CLOUDINARY_URL
-CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
-if CLOUDINARY_URL:
-    cloudinary.config(
-        cloudinary_url=CLOUDINARY_URL
-    )
 
 # -----------------------
 # CONFIGURACIÓN BÁSICA
@@ -30,7 +23,6 @@ app.config['SECRET_KEY'] = 'cambia-esta-clave-por-una-muy-larga'
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-# Carpeta local (ya casi no se usa, pero la dejamos por compatibilidad)
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -41,39 +33,45 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
 # URL de la base de datos PostgreSQL (Render)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# URL Cloudinary (Render / .env)
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+if CLOUDINARY_URL:
+    # Configurar Cloudinary a partir de CLOUDINARY_URL
+    cloudinary.config(cloudinary_url=CLOUDINARY_URL)
 
 
-# -----------------------
-# CLOUDINARY HELPER
-# -----------------------
-def upload_to_cloudinary(file_storage, folder_prefix):
+def allowed_file(filename: str) -> bool:
+    return (
+        filename
+        and '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
+
+
+def is_cloud_url(path: str) -> bool:
+    """Devuelve True si el path parece ser una URL (Cloudinary)."""
+    if not path:
+        return False
+    return path.startswith("http://") or path.startswith("https://")
+
+
+def upload_to_cloudinary(file_storage, folder: str) -> str | None:
     """
-    Sube una imagen a Cloudinary y regresa la URL segura.
-    Si algo falla, regresa None y simplemente no actualizamos la imagen.
+    Sube un archivo a Cloudinary y regresa la URL segura.
+    Si falla, regresa None (y no truena el servidor).
     """
-    if not file_storage or not file_storage.filename:
+    if not CLOUDINARY_URL:
         return None
-
-    if not allowed_file(file_storage.filename):
-        return None
-
-    # Nombre "limpio" (sin espacios raros)
-    base_name = secure_filename(file_storage.filename.rsplit('.', 1)[0])
 
     try:
         result = cloudinary.uploader.upload(
             file_storage,
-            folder=f"intercambio-navidad/{folder_prefix}",
-            public_id=base_name,
-            overwrite=True,
-            resource_type="image"
+            folder=folder
         )
         return result.get("secure_url")
     except Exception as e:
-        print("Error subiendo a Cloudinary:", e)
+        app.logger.exception("Error subiendo imagen a Cloudinary: %s", e)
         return None
 
 
@@ -113,7 +111,6 @@ def init_db():
     """)
 
     # Tabla de deseos de regalo (dos opciones, con foto opcional)
-    # IMPORTANTE: aquí guardamos la URL completa de Cloudinary
     c.execute("""
         CREATE TABLE IF NOT EXISTS wishes (
             id SERIAL PRIMARY KEY,
@@ -126,7 +123,7 @@ def init_db():
         );
     """)
 
-    # Tabla de comidas (también URL completa de Cloudinary)
+    # Tabla de comidas
     c.execute("""
         CREATE TABLE IF NOT EXISTS foods (
             id SERIAL PRIMARY KEY,
@@ -296,21 +293,35 @@ def dashboard():
         wish1 = request.form.get("wish1", "").strip()
         wish2 = request.form.get("wish2", "").strip()
 
-        # Empezamos con lo que ya hubiera en BD
+        # Empezar con lo que ya había (si existe)
         wish1_img = my_wishes["wish1_img"] if my_wishes else None
         wish2_img = my_wishes["wish2_img"] if my_wishes else None
 
-        # Manejar foto para deseo 1 (Cloudinary)
+        # Manejar foto para deseo 1
         file1 = request.files.get("wish1_img")
-        new_url1 = upload_to_cloudinary(file1, f"deseos/{user['id']}")
-        if new_url1:
-            wish1_img = new_url1
+        if file1 and file1.filename and allowed_file(file1.filename):
+            # Primero intentamos Cloudinary
+            url1 = upload_to_cloudinary(file1, folder=f"intercambio-navidad/deseos/{user['name']}")
+            if url1:
+                wish1_img = url1
+            else:
+                # Fallback: guardar local
+                filename1 = secure_filename(file1.filename)
+                local_name1 = f"w1_{user['id']}_{filename1}"
+                file1.save(os.path.join(app.config["UPLOAD_FOLDER"], local_name1))
+                wish1_img = local_name1
 
-        # Manejar foto para deseo 2 (Cloudinary)
+        # Manejar foto para deseo 2
         file2 = request.files.get("wish2_img")
-        new_url2 = upload_to_cloudinary(file2, f"deseos/{user['id']}")
-        if new_url2:
-            wish2_img = new_url2
+        if file2 and file2.filename and allowed_file(file2.filename):
+            url2 = upload_to_cloudinary(file2, folder=f"intercambio-navidad/deseos/{user['name']}")
+            if url2:
+                wish2_img = url2
+            else:
+                filename2 = secure_filename(file2.filename)
+                local_name2 = f"w2_{user['id']}_{filename2}"
+                file2.save(os.path.join(app.config["UPLOAD_FOLDER"], local_name2))
+                wish2_img = local_name2
 
         # Si ya tiene fila en wishes, actualizar; si no, crear
         if my_wishes:
@@ -355,15 +366,35 @@ def delete_wishes():
     conn = get_db()
     c = conn.cursor()
 
-    # Borrar registro de desires (no borramos en Cloudinary para no complicar)
+    # Buscar nombres de archivos para borrarlos del disco (solo si no son URLs)
     c.execute(
-        "DELETE FROM wishes WHERE participant_id = %s;",
+        "SELECT wish1_img, wish2_img FROM wishes WHERE participant_id = %s;",
         (user["id"],)
     )
-    conn.commit()
-    conn.close()
+    row = c.fetchone()
 
-    flash("Tu lista de deseos se borró correctamente.", "info")
+    if row:
+        for col in ("wish1_img", "wish2_img"):
+            filename = row[col]
+            if filename and not is_cloud_url(filename):
+                path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+
+        # Borrar registro de deseos
+        c.execute(
+            "DELETE FROM wishes WHERE participant_id = %s;",
+            (user["id"],)
+        )
+        conn.commit()
+        flash("Tu lista de deseos se borró correctamente.", "info")
+    else:
+        flash("No tenías lista de deseos guardada.", "info")
+
+    conn.close()
     return redirect(url_for("dashboard"))
 
 
@@ -427,11 +458,19 @@ def foods():
         if not person_name:
             person_name = user["name"] if user else "Invitado"
 
-        img_url = None
+        img_filename = None
         file = request.files.get("food_img")
-        new_food_url = upload_to_cloudinary(file, f"comidas/{person_name}")
-        if new_food_url:
-            img_url = new_food_url
+        if file and file.filename and allowed_file(file.filename):
+            # Primero intentamos Cloudinary
+            url = upload_to_cloudinary(file, folder=f"intercambio-navidad/comidas/{person_name}")
+            if url:
+                img_filename = url
+            else:
+                # Fallback: local
+                filename = secure_filename(file.filename)
+                local_name = f"food_{person_name}_{filename}"
+                file.save(os.path.join(app.config["UPLOAD_FOLDER"], local_name))
+                img_filename = local_name
 
         if title:
             c.execute(
@@ -439,7 +478,7 @@ def foods():
                 INSERT INTO foods (person_name, title, description, image_filename)
                 VALUES (%s, %s, %s, %s);
                 """,
-                (person_name, title, description, img_url)
+                (person_name, title, description, img_filename)
             )
             conn.commit()
             flash("Comida registrada para la cena de Navidad.", "success")
@@ -480,12 +519,20 @@ def edit_food(food_id):
             flash("El nombre del platillo es obligatorio.", "danger")
             return redirect(url_for("edit_food", food_id=food_id))
 
-        img_url = food["image_filename"]
+        img_filename = food["image_filename"]
 
         file = request.files.get("food_img")
-        new_food_url = upload_to_cloudinary(file, f"comidas/{person_name}")
-        if new_food_url:
-            img_url = new_food_url
+        if file and file.filename and allowed_file(file.filename):
+            # Intentar subir nueva imagen a Cloudinary
+            url = upload_to_cloudinary(file, folder=f"intercambio-navidad/comidas/{person_name}")
+            if url:
+                img_filename = url
+            else:
+                # Si falla Cloudinary, fallback a local
+                filename = secure_filename(file.filename)
+                local_name = f"food_{person_name}_{filename}"
+                file.save(os.path.join(app.config["UPLOAD_FOLDER"], local_name))
+                img_filename = local_name
 
         c.execute(
             """
@@ -493,7 +540,7 @@ def edit_food(food_id):
             SET person_name = %s, title = %s, description = %s, image_filename = %s
             WHERE id = %s;
             """,
-            (person_name, title, description, img_url, food_id)
+            (person_name, title, description, img_filename, food_id)
         )
         conn.commit()
         conn.close()
@@ -507,11 +554,24 @@ def edit_food(food_id):
 
 @app.route("/comidas/eliminar/<int:food_id>", methods=["POST"])
 def delete_food(food_id):
-    """Eliminar un platillo (y su imagen si existe)."""
+    """Eliminar un platillo (y su imagen local si existe)."""
     conn = get_db()
     c = conn.cursor()
 
-    # Solo borramos el registro; las imágenes en Cloudinary se quedan (no pasa nada para 30 fotos)
+    # Buscar la imagen para borrarla del disco (solo si no es URL)
+    c.execute("SELECT image_filename FROM foods WHERE id = %s;", (food_id,))
+    row = c.fetchone()
+    if row and row["image_filename"]:
+        img = row["image_filename"]
+        if not is_cloud_url(img):
+            img_path = os.path.join(app.config["UPLOAD_FOLDER"], img)
+            if os.path.exists(img_path):
+                try:
+                    os.remove(img_path)
+                except OSError:
+                    pass  # si falla, no pasa nada grave
+
+    # Borrar el registro de la BD
     c.execute("DELETE FROM foods WHERE id = %s;", (food_id,))
     conn.commit()
     conn.close()
